@@ -34,18 +34,19 @@ interface GameState {
   toggleUI: () => void
 }
 
+// 힐링 분위기 - 대부분 휴식 중인 상태로 시작
 const initialCats: CatState[] = [
   {
     id: 'cat-1',
     name: '나비',
-    position: [0, 0, 1.5],
-    rotation: 0,
-    action: 'idle',
+    position: [-3.5, 0.6, -3],  // 소파 위
+    rotation: Math.PI / 4,
+    action: 'sleeping',         // 자고 있음
     targetPosition: null,
-    targetFurniture: null,
-    onFurniture: false,
+    targetFurniture: 'sofa1',
+    onFurniture: true,
     knockingOff: false,
-    happiness: 80,
+    happiness: 85,
     color: '#F4A460',
     pattern: 'tabby',
     eyeColor: '#7CB342',
@@ -53,11 +54,11 @@ const initialCats: CatState[] = [
   {
     id: 'cat-2',
     name: '우유',
-    position: [-3.5, 0.6, -3],
-    rotation: Math.PI / 2,
-    action: 'sitting',
+    position: [4.5, 2.1, -3.5],  // 캣타워 꼭대기
+    rotation: -Math.PI / 3,
+    action: 'sitting',           // 앉아서 내려다봄
     targetPosition: null,
-    targetFurniture: 'sofa',
+    targetFurniture: 'cattree-top',
     onFurniture: true,
     knockingOff: false,
     happiness: 90,
@@ -68,14 +69,14 @@ const initialCats: CatState[] = [
   {
     id: 'cat-3',
     name: '까망',
-    position: [-1, 0.1, 3],
-    rotation: -Math.PI / 3,
-    action: 'sleeping',
+    position: [-1, 0.1, 3],      // 고양이 침대
+    rotation: Math.PI / 6,
+    action: 'sleeping',          // 웅크리고 자는 중
     targetPosition: null,
-    targetFurniture: 'bed',
+    targetFurniture: 'bed1',
     onFurniture: true,
     knockingOff: false,
-    happiness: 70,
+    happiness: 95,
     color: '#2D2D2D',
     pattern: 'solid',
     eyeColor: '#FFD54F',
@@ -83,14 +84,14 @@ const initialCats: CatState[] = [
   {
     id: 'cat-4',
     name: '삼색이',
-    position: [1, 0, -1],
-    rotation: Math.PI / 6,
-    action: 'playing',
+    position: [3.5, 0.6, 2],     // 다른 소파
+    rotation: -Math.PI / 2,
+    action: 'idle',              // 멍때리는 중
     targetPosition: null,
-    targetFurniture: null,
-    onFurniture: false,
+    targetFurniture: 'sofa2',
+    onFurniture: true,
     knockingOff: false,
-    happiness: 95,
+    happiness: 80,
     color: '#FFE4C4',
     pattern: 'calico',
     eyeColor: '#81C784',
@@ -98,14 +99,14 @@ const initialCats: CatState[] = [
   {
     id: 'cat-5',
     name: '양말',
-    position: [4.5, 1.3, -3.5],
-    rotation: -Math.PI / 4,
-    action: 'idle',
+    position: [3, 0.1, -1],      // 고양이 침대2
+    rotation: Math.PI / 3,
+    action: 'sleeping',          // 자는 중
     targetPosition: null,
-    targetFurniture: 'catTree',
+    targetFurniture: 'bed2',
     onFurniture: true,
     knockingOff: false,
-    happiness: 85,
+    happiness: 88,
     color: '#A0A0A0',
     pattern: 'bicolor',
     eyeColor: '#4FC3F7',

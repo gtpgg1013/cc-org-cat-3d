@@ -46,10 +46,18 @@ export function Lighting() {
         color={settings.skyColor}
       />
 
-      {/* Subtle bounce light from floor */}
+      {/* Subtle bounce light - 따뜻한 분위기 */}
       <hemisphereLight
-        args={['#87CEEB', '#8B7355', 0.2]}
+        args={['#FFF8E7', '#D4A574', 0.3]}
       />
+
+      {/* 실내 포인트 조명 (따뜻한 느낌) */}
+      {settings.indoorLightsOn && (
+        <>
+          <pointLight position={[-4, 2, -1.5]} intensity={0.4} color="#FFE4B5" distance={5} />
+          <pointLight position={[4.5, 2, 0.5]} intensity={0.4} color="#FFE4B5" distance={5} />
+        </>
+      )}
     </>
   )
 }

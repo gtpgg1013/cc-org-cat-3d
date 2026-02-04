@@ -2,37 +2,38 @@ import { useMemo } from 'react'
 import { useGameStore } from '../stores/gameStore'
 import type { TimeOfDay, TimeSettings } from '../types'
 
+// 힐링스러운 따뜻한 조명 설정
 const TIME_PRESETS: Record<TimeOfDay, TimeSettings> = {
   morning: {
     hour: 8,
-    skyColor: '#87CEEB',
-    ambientIntensity: 0.4,
-    sunIntensity: 0.7,
-    sunColor: '#FFF5E6',
+    skyColor: '#B4D7E8',      // 부드러운 하늘색
+    ambientIntensity: 0.5,
+    sunIntensity: 0.8,
+    sunColor: '#FFF8E7',      // 따뜻한 아침 햇살
     indoorLightsOn: false,
   },
   noon: {
-    hour: 12,
-    skyColor: '#ADD8E6',
-    ambientIntensity: 0.5,
-    sunIntensity: 1.0,
-    sunColor: '#FFFFFF',
+    hour: 14,                 // 오후 2시 - 가장 힐링스러운 시간
+    skyColor: '#C9E4F0',      // 맑은 하늘
+    ambientIntensity: 0.55,
+    sunIntensity: 0.9,
+    sunColor: '#FFFAF0',      // 따뜻한 햇살
     indoorLightsOn: false,
   },
   evening: {
-    hour: 18,
-    skyColor: '#FFA07A',
-    ambientIntensity: 0.3,
-    sunIntensity: 0.5,
-    sunColor: '#FF8C00',
+    hour: 17,
+    skyColor: '#FFD4A3',      // 골든아워
+    ambientIntensity: 0.4,
+    sunIntensity: 0.6,
+    sunColor: '#FFB347',      // 따뜻한 노을
     indoorLightsOn: true,
   },
   night: {
-    hour: 22,
-    skyColor: '#1a1a2e',
-    ambientIntensity: 0.15,
-    sunIntensity: 0.1,
-    sunColor: '#4169E1',
+    hour: 21,
+    skyColor: '#2D3A4A',      // 부드러운 밤하늘
+    ambientIntensity: 0.25,   // 너무 어둡지 않게
+    sunIntensity: 0.15,
+    sunColor: '#6B8CAE',      // 달빛
     indoorLightsOn: true,
   },
 }

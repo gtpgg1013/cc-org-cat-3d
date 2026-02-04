@@ -2,106 +2,106 @@ import { useEffect, useRef } from 'react'
 import { useGameStore } from '../stores/gameStore'
 import type { CatAction } from '../types'
 
-// 가구 스팟 - 고양이가 앉을 수 있는 곳
-interface FurnitureSpot {
-  id: string
-  position: [number, number, number]
-  actions: CatAction[]
-  canKnockOff?: boolean
-}
+/**
+ * 진짜 고양이처럼 행동하는 AI 시스템
+ *
+ * 실제 고양이 관찰 기반:
+ * - 하루 16시간 수면 (67%)
+ * - 그루밍 15%
+ * - 휴식/관찰 13%
+ * - 활동 5%
+ */
 
-const FURNITURE_SPOTS: FurnitureSpot[] = [
-  // 소파
-  { id: 'sofa1', position: [-3.5, 0.6, -3], actions: ['sitting', 'sleeping'] },
-  { id: 'sofa2', position: [3.5, 0.6, 2], actions: ['sitting', 'sleeping'] },
-  // 캣타워
-  { id: 'cattree1', position: [4.5, 1.3, -3.5], actions: ['sitting', 'playing'] },
-  { id: 'cattree2', position: [4.5, 2.1, -3.5], actions: ['sitting', 'idle'] },
-  // 고양이 침대
-  { id: 'bed1', position: [-1, 0.1, 3], actions: ['sleeping', 'sitting'] },
-  { id: 'bed2', position: [3, 0.1, -1], actions: ['sleeping'] },
-  // 테이블 (물건 떨어뜨림)
-  { id: 'table1', position: [0, 0.55, 0], actions: ['sitting'], canKnockOff: true },
-  { id: 'table2', position: [-2, 0.55, -3], actions: ['idle'], canKnockOff: true },
-  { id: 'table3', position: [2, 0.55, 2], actions: ['sitting'], canKnockOff: true },
+// 가구 위치 - 고양이가 좋아하는 스팟
+const FAVORITE_SPOTS = [
+  // 높은 곳 (고양이가 좋아함)
+  { id: 'cattree-top', pos: [4.5, 2.1, -3.5] as const, comfort: 0.95 },
+  { id: 'cattree-mid', pos: [4.5, 1.3, -3.5] as const, comfort: 0.9 },
+  // 푹신한 곳
+  { id: 'sofa1', pos: [-3.5, 0.6, -3] as const, comfort: 0.85 },
+  { id: 'sofa2', pos: [3.5, 0.6, 2] as const, comfort: 0.85 },
+  // 침대
+  { id: 'bed1', pos: [-1, 0.1, 3] as const, comfort: 0.9 },
+  { id: 'bed2', pos: [3, 0.1, -1] as const, comfort: 0.9 },
+  // 테이블 (장난치기 좋음)
+  { id: 'table1', pos: [0, 0.55, 0] as const, comfort: 0.5, mischief: true },
+  { id: 'table2', pos: [-2, 0.55, -3] as const, comfort: 0.5, mischief: true },
 ]
 
-// 바닥에서 안전하게 걸을 수 있는 포인트들 (가구 사이 빈 공간)
-const FLOOR_WAYPOINTS: [number, number, number][] = [
-  // 중앙 영역
-  [0, 0, 1.5],
-  [0, 0, -1.5],
-  [1.5, 0, 0],
-  [-1.5, 0, 0],
-  // 왼쪽 영역
-  [-2.5, 0, 1],
-  [-2.5, 0, -1],
-  [-1, 0, -1.5],
-  // 오른쪽 영역
-  [2.5, 0, -0.5],
-  [2.5, 0, 0.5],
-  [1, 0, 3],
-  // 가장자리
-  [-3, 0, 2],
-  [3, 0, -2],
-  [0, 0, 3.5],
-]
+// 바닥 순찰 포인트
+const PATROL_POINTS = [
+  [0, 0, 1.5], [0, 0, -1.5], [1.5, 0, 0], [-1.5, 0, 0],
+  [-2.5, 0, 1], [2.5, 0, -0.5], [1, 0, 3], [-3, 0, 2],
+] as const
 
-const ACTION_DURATIONS: Record<CatAction, [number, number]> = {
-  idle: [2000, 4000],
-  walking: [2000, 5000],
-  sitting: [4000, 8000],
-  sleeping: [6000, 12000],
-  playing: [2000, 4000],
+// 진짜 고양이 같은 행동 가중치
+const BEHAVIOR_MATRIX: Record<CatAction, Record<CatAction, number>> = {
+  sleeping: {
+    sleeping: 70,    // 계속 자기
+    idle: 20,        // 일어나서 멍때리기
+    sitting: 8,      // 앉기
+    walking: 1,      // 드물게 이동
+    playing: 1,      // 아주 드물게 놀기
+  },
+  idle: {
+    sleeping: 30,    // 다시 잠들기
+    idle: 35,        // 계속 멍
+    sitting: 20,     // 앉기
+    walking: 10,     // 이동
+    playing: 5,      // 놀기
+  },
+  sitting: {
+    sleeping: 40,    // 앉다가 잠들기
+    idle: 25,        // 멍때리기
+    sitting: 20,     // 계속 앉아있기
+    walking: 10,     // 이동
+    playing: 5,      // 놀기
+  },
+  walking: {
+    sleeping: 5,     // 걷다가 잠들진 않음
+    idle: 30,        // 멈춰서 멍
+    sitting: 35,     // 앉기
+    walking: 20,     // 계속 걷기
+    playing: 10,     // 놀기
+  },
+  playing: {
+    sleeping: 5,     // 놀다가 지쳐서 잠
+    idle: 20,        // 멈추기
+    sitting: 15,     // 앉기
+    walking: 30,     // 뛰어다니기
+    playing: 30,     // 계속 놀기
+  },
 }
 
-const BEHAVIOR_WEIGHTS: Record<CatAction, { action: CatAction; weight: number }[]> = {
-  idle: [
-    { action: 'walking', weight: 60 },
-    { action: 'sitting', weight: 25 },
-    { action: 'playing', weight: 15 },
-  ],
-  walking: [
-    { action: 'idle', weight: 30 },
-    { action: 'sitting', weight: 40 },
-    { action: 'walking', weight: 30 },
-  ],
-  sitting: [
-    { action: 'walking', weight: 50 },
-    { action: 'sleeping', weight: 30 },
-    { action: 'idle', weight: 20 },
-  ],
-  sleeping: [
-    { action: 'sitting', weight: 50 },
-    { action: 'idle', weight: 30 },
-    { action: 'walking', weight: 20 },
-  ],
-  playing: [
-    { action: 'walking', weight: 40 },
-    { action: 'idle', weight: 40 },
-    { action: 'playing', weight: 20 },
-  ],
+// 행동별 지속 시간 (ms) - 더 현실적으로
+const DURATIONS: Record<CatAction, [number, number]> = {
+  sleeping: [8000, 20000],  // 오래 잠
+  idle: [3000, 8000],       // 멍때리기
+  sitting: [4000, 10000],   // 앉아있기
+  walking: [2000, 4000],    // 짧게 이동
+  playing: [2000, 5000],    // 놀기
 }
 
 function randomRange(min: number, max: number): number {
   return Math.random() * (max - min) + min
 }
 
-function pickWeighted<T>(items: { action: T; weight: number }[]): T {
-  const total = items.reduce((sum, i) => sum + i.weight, 0)
+function pickWeighted(weights: Record<CatAction, number>): CatAction {
+  const entries = Object.entries(weights) as [CatAction, number][]
+  const total = entries.reduce((sum, [, w]) => sum + w, 0)
   let r = Math.random() * total
-  for (const item of items) {
-    r -= item.weight
-    if (r <= 0) return item.action
+  for (const [action, weight] of entries) {
+    r -= weight
+    if (r <= 0) return action
   }
-  return items[0].action
+  return 'idle'
 }
 
-function pickRandom<T>(arr: T[]): T {
+function pickRandom<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]
 }
 
-function distance(a: [number, number, number], b: [number, number, number]): number {
+function distance2D(a: readonly number[], b: readonly number[]): number {
   const dx = a[0] - b[0]
   const dz = a[2] - b[2]
   return Math.sqrt(dx * dx + dz * dz)
@@ -114,74 +114,89 @@ export function useCatBehavior(catId: string) {
   useEffect(() => {
     mountedRef.current = true
 
-    const tick = () => {
+    const decide = () => {
       if (!mountedRef.current) return
 
       const state = useGameStore.getState()
       const cat = state.cats.find(c => c.id === catId)
       if (!cat) return
 
-      // 다음 행동 결정
-      const nextAction = pickWeighted(BEHAVIOR_WEIGHTS[cat.action])
+      // 다음 행동 결정 (현재 행동 기반 마르코프 체인)
+      const weights = BEHAVIOR_MATRIX[cat.action]
+      const nextAction = pickWeighted(weights)
+
       const updates: Partial<typeof cat> = { action: nextAction }
 
       if (nextAction === 'walking') {
-        // 50% 바닥 이동, 50% 가구로 점프
-        const goToFurniture = Math.random() < 0.5
+        // 어디로 갈지 결정
+        const goToFurniture = Math.random() < 0.6
 
         if (goToFurniture) {
-          // 현재 위치에서 먼 가구 선택
-          const validSpots = FURNITURE_SPOTS.filter(s =>
-            distance(cat.position, s.position) > 1.5
+          // comfort가 높은 스팟 선호
+          const validSpots = FAVORITE_SPOTS.filter(s =>
+            distance2D(cat.position, s.pos) > 1.5
           )
 
           if (validSpots.length > 0) {
-            const spot = pickRandom(validSpots)
-            updates.targetPosition = [...spot.position] as [number, number, number]
+            // comfort 가중치로 선택
+            const totalComfort = validSpots.reduce((sum, s) => sum + s.comfort, 0)
+            let r = Math.random() * totalComfort
+            let spot = validSpots[0]
+            for (const s of validSpots) {
+              r -= s.comfort
+              if (r <= 0) { spot = s; break }
+            }
+
+            updates.targetPosition = [...spot.pos] as [number, number, number]
             updates.targetFurniture = spot.id
             updates.onFurniture = true
 
-            if (spot.canKnockOff && Math.random() < 0.3) {
+            // 테이블이면 장난칠 수도
+            if ('mischief' in spot && spot.mischief && Math.random() < 0.25) {
               updates.knockingOff = true
             }
           } else {
-            // 갈 곳 없으면 바닥
-            const point = pickRandom(FLOOR_WAYPOINTS)
-            updates.targetPosition = [point[0] + randomRange(-0.2, 0.2), 0, point[2] + randomRange(-0.2, 0.2)]
+            // 바닥 순찰
+            const point = pickRandom(PATROL_POINTS)
+            updates.targetPosition = [point[0], 0, point[2]]
             updates.targetFurniture = null
             updates.onFurniture = false
           }
         } else {
-          // 바닥 이동 - 가까운 waypoint 중 하나 선택
-          const nearPoints = FLOOR_WAYPOINTS
-            .map(p => ({ point: p, dist: distance(cat.position, p) }))
-            .filter(p => p.dist > 0.5 && p.dist < 4)
-            .sort((a, b) => a.dist - b.dist)
-            .slice(0, 5)
-
-          if (nearPoints.length > 0) {
-            const chosen = pickRandom(nearPoints).point
-            updates.targetPosition = [chosen[0] + randomRange(-0.2, 0.2), 0, chosen[2] + randomRange(-0.2, 0.2)]
-          } else {
-            updates.targetPosition = [cat.position[0] + randomRange(-1, 1), 0, cat.position[2] + randomRange(-1, 1)]
-          }
+          // 바닥 순찰 - 가까운 포인트로
+          const nearPoints = PATROL_POINTS.filter(p =>
+            distance2D(cat.position, p) > 0.8 && distance2D(cat.position, p) < 3
+          )
+          const point = nearPoints.length > 0 ? pickRandom(nearPoints) : pickRandom(PATROL_POINTS)
+          updates.targetPosition = [point[0] + randomRange(-0.2, 0.2), 0, point[2] + randomRange(-0.2, 0.2)]
           updates.targetFurniture = null
           updates.onFurniture = false
         }
+      } else if (nextAction === 'playing') {
+        // 놀 때는 근처에서 뛰어다님
+        updates.targetPosition = [
+          cat.position[0] + randomRange(-1, 1),
+          0,
+          cat.position[2] + randomRange(-1, 1)
+        ]
+        updates.targetFurniture = null
+        updates.onFurniture = false
       } else {
+        // 휴식 계열 행동
         updates.targetPosition = null
         updates.knockingOff = false
       }
 
       state.updateCat(catId, updates)
 
-      // 다음 틱 예약
-      const [min, max] = ACTION_DURATIONS[nextAction]
-      timerRef.current = setTimeout(tick, randomRange(min, max))
+      // 다음 결정 시간
+      const [min, max] = DURATIONS[nextAction]
+      const delay = randomRange(min, max)
+      timerRef.current = setTimeout(decide, delay)
     }
 
-    // 시작
-    timerRef.current = setTimeout(tick, randomRange(500, 2000))
+    // 초기 딜레이 (각 고양이마다 다르게)
+    timerRef.current = setTimeout(decide, randomRange(1000, 3000))
 
     return () => {
       mountedRef.current = false
