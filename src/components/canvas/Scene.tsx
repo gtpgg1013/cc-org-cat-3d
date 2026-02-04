@@ -3,6 +3,7 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Cafe } from '../environment/Cafe'
 import { Furniture } from '../environment/Furniture'
+import { FallenItems } from '../environment/FallenItems'
 import { Lighting } from '../environment/Lighting'
 import { CatManager } from '../cats/CatManager'
 import { Interaction } from '../interaction/Interaction'
@@ -22,6 +23,7 @@ function SceneContent() {
       <Suspense fallback={null}>
         <Cafe />
         <Furniture />
+        <FallenItems />
         <CatManager />
       </Suspense>
 

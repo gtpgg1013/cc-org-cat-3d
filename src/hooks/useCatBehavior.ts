@@ -2,80 +2,98 @@ import { useEffect, useRef } from 'react'
 import { useGameStore } from '../stores/gameStore'
 import type { CatAction } from '../types'
 
-// 가구 위치들 (인터랙션 포인트)
-const FURNITURE_SPOTS = [
-  { position: [-3.5, 0, -3] as [number, number, number], type: 'sofa', actions: ['sitting', 'sleeping'] },
-  { position: [3.5, 0, 2] as [number, number, number], type: 'sofa', actions: ['sitting', 'sleeping'] },
-  { position: [4.5, 0, -3.5] as [number, number, number], type: 'catTree', actions: ['sitting', 'playing'] },
-  { position: [-1, 0, 3] as [number, number, number], type: 'bed', actions: ['sleeping', 'sitting'] },
-  { position: [3, 0, -1] as [number, number, number], type: 'bed', actions: ['sleeping'] },
-  { position: [0, 0, 4] as [number, number, number], type: 'window', actions: ['sitting', 'idle'] },
-  { position: [5.5, 0, 1.5] as [number, number, number], type: 'window', actions: ['sitting', 'idle'] },
-  { position: [0, 0, 0] as [number, number, number], type: 'table', actions: ['sitting', 'playing'] },
-  { position: [-2, 0, -3] as [number, number, number], type: 'table', actions: ['idle'] },
-]
-
-// 랜덤 배회 포인트
-const WANDER_POINTS: [number, number, number][] = [
-  [0, 0, 0], [1, 0, 1], [-1, 0, 1], [2, 0, -2], [-2, 0, -1],
-  [1, 0, -1], [-1, 0, 2], [3, 0, 1], [-3, 0, 0], [0, 0, -2],
-]
-
-// 더 짧은 시간으로 자주 움직이게
-const ACTION_DURATIONS: Record<CatAction, [number, number]> = {
-  idle: [1500, 3000],      // 1.5~3초
-  walking: [2000, 4000],   // 2~4초
-  sitting: [3000, 6000],   // 3~6초
-  sleeping: [5000, 10000], // 5~10초
-  playing: [1500, 3000],   // 1.5~3초
+// 가구 스팟 - 고양이가 앉을 수 있는 곳
+interface FurnitureSpot {
+  id: string
+  position: [number, number, number]
+  actions: CatAction[]
+  canKnockOff?: boolean
 }
 
-// 다음 행동 확률 (더 활발하게)
-const NEXT_ACTIONS: Record<CatAction, { action: CatAction; weight: number }[]> = {
+const FURNITURE_SPOTS: FurnitureSpot[] = [
+  // 소파
+  { id: 'sofa1', position: [-3.5, 0.6, -3], actions: ['sitting', 'sleeping'] },
+  { id: 'sofa2', position: [3.5, 0.6, 2], actions: ['sitting', 'sleeping'] },
+  // 캣타워
+  { id: 'cattree1', position: [4.5, 1.3, -3.5], actions: ['sitting', 'playing'] },
+  { id: 'cattree2', position: [4.5, 2.1, -3.5], actions: ['sitting', 'idle'] },
+  // 고양이 침대
+  { id: 'bed1', position: [-1, 0.1, 3], actions: ['sleeping', 'sitting'] },
+  { id: 'bed2', position: [3, 0.1, -1], actions: ['sleeping'] },
+  // 테이블 (물건 떨어뜨림)
+  { id: 'table1', position: [0, 0.55, 0], actions: ['sitting'], canKnockOff: true },
+  { id: 'table2', position: [-2, 0.55, -3], actions: ['idle'], canKnockOff: true },
+  { id: 'table3', position: [2, 0.55, 2], actions: ['sitting'], canKnockOff: true },
+]
+
+// 바닥에서 안전하게 걸을 수 있는 포인트들 (가구 사이 빈 공간)
+const FLOOR_WAYPOINTS: [number, number, number][] = [
+  // 중앙 영역
+  [0, 0, 1.5],
+  [0, 0, -1.5],
+  [1.5, 0, 0],
+  [-1.5, 0, 0],
+  // 왼쪽 영역
+  [-2.5, 0, 1],
+  [-2.5, 0, -1],
+  [-1, 0, -1.5],
+  // 오른쪽 영역
+  [2.5, 0, -0.5],
+  [2.5, 0, 0.5],
+  [1, 0, 3],
+  // 가장자리
+  [-3, 0, 2],
+  [3, 0, -2],
+  [0, 0, 3.5],
+]
+
+const ACTION_DURATIONS: Record<CatAction, [number, number]> = {
+  idle: [2000, 4000],
+  walking: [2000, 5000],
+  sitting: [4000, 8000],
+  sleeping: [6000, 12000],
+  playing: [2000, 4000],
+}
+
+const BEHAVIOR_WEIGHTS: Record<CatAction, { action: CatAction; weight: number }[]> = {
   idle: [
-    { action: 'walking', weight: 50 },
-    { action: 'playing', weight: 20 },
-    { action: 'sitting', weight: 20 },
-    { action: 'idle', weight: 10 },
+    { action: 'walking', weight: 60 },
+    { action: 'sitting', weight: 25 },
+    { action: 'playing', weight: 15 },
   ],
   walking: [
     { action: 'idle', weight: 30 },
-    { action: 'sitting', weight: 30 },
-    { action: 'playing', weight: 20 },
-    { action: 'walking', weight: 20 },
+    { action: 'sitting', weight: 40 },
+    { action: 'walking', weight: 30 },
   ],
   sitting: [
-    { action: 'walking', weight: 40 },
-    { action: 'idle', weight: 25 },
-    { action: 'sleeping', weight: 20 },
-    { action: 'playing', weight: 15 },
+    { action: 'walking', weight: 50 },
+    { action: 'sleeping', weight: 30 },
+    { action: 'idle', weight: 20 },
   ],
   sleeping: [
-    { action: 'idle', weight: 40 },
-    { action: 'sitting', weight: 40 },
+    { action: 'sitting', weight: 50 },
+    { action: 'idle', weight: 30 },
     { action: 'walking', weight: 20 },
   ],
   playing: [
     { action: 'walking', weight: 40 },
-    { action: 'idle', weight: 30 },
+    { action: 'idle', weight: 40 },
     { action: 'playing', weight: 20 },
-    { action: 'sitting', weight: 10 },
   ],
 }
 
-function randomInRange(min: number, max: number): number {
+function randomRange(min: number, max: number): number {
   return Math.random() * (max - min) + min
 }
 
-function weightedRandom<T>(items: { action: T; weight: number }[]): T {
-  const totalWeight = items.reduce((sum, item) => sum + item.weight, 0)
-  let random = Math.random() * totalWeight
-
+function pickWeighted<T>(items: { action: T; weight: number }[]): T {
+  const total = items.reduce((sum, i) => sum + i.weight, 0)
+  let r = Math.random() * total
   for (const item of items) {
-    random -= item.weight
-    if (random <= 0) return item.action
+    r -= item.weight
+    if (r <= 0) return item.action
   }
-
   return items[0].action
 }
 
@@ -83,27 +101,10 @@ function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]
 }
 
-function getRandomWanderPoint(): [number, number, number] {
-  const base = pickRandom(WANDER_POINTS)
-  return [
-    base[0] + randomInRange(-0.5, 0.5),
-    0,
-    base[2] + randomInRange(-0.5, 0.5),
-  ]
-}
-
-function getNearbyFurniture(currentPos: [number, number, number]): typeof FURNITURE_SPOTS[0] | null {
-  // 50% 확률로 가구로 이동
-  if (Math.random() > 0.5) return null
-
-  const validSpots = FURNITURE_SPOTS.filter(spot => {
-    const dx = spot.position[0] - currentPos[0]
-    const dz = spot.position[2] - currentPos[2]
-    const dist = Math.sqrt(dx * dx + dz * dz)
-    return dist > 0.5 // 너무 가까운 곳 제외
-  })
-
-  return validSpots.length > 0 ? pickRandom(validSpots) : null
+function distance(a: [number, number, number], b: [number, number, number]): number {
+  const dx = a[0] - b[0]
+  const dz = a[2] - b[2]
+  return Math.sqrt(dx * dx + dz * dz)
 }
 
 export function useCatBehavior(catId: string) {
@@ -113,58 +114,78 @@ export function useCatBehavior(catId: string) {
   useEffect(() => {
     mountedRef.current = true
 
-    const runBehavior = () => {
+    const tick = () => {
       if (!mountedRef.current) return
 
       const state = useGameStore.getState()
-      const cat = state.cats.find((c) => c.id === catId)
+      const cat = state.cats.find(c => c.id === catId)
       if (!cat) return
 
-      // 가중치 기반으로 다음 행동 선택
-      const possibleActions = NEXT_ACTIONS[cat.action]
-      const nextAction = weightedRandom(possibleActions)
-
+      // 다음 행동 결정
+      const nextAction = pickWeighted(BEHAVIOR_WEIGHTS[cat.action])
       const updates: Partial<typeof cat> = { action: nextAction }
 
       if (nextAction === 'walking') {
-        // 가구로 갈지 랜덤하게 배회할지
-        const furniture = getNearbyFurniture(cat.position)
+        // 50% 바닥 이동, 50% 가구로 점프
+        const goToFurniture = Math.random() < 0.5
 
-        if (furniture) {
-          // 가구 근처로 이동
-          updates.targetPosition = [
-            furniture.position[0] + randomInRange(-0.3, 0.3),
-            0,
-            furniture.position[2] + randomInRange(-0.3, 0.3),
-          ]
-          updates.targetFurniture = furniture.type
+        if (goToFurniture) {
+          // 현재 위치에서 먼 가구 선택
+          const validSpots = FURNITURE_SPOTS.filter(s =>
+            distance(cat.position, s.position) > 1.5
+          )
+
+          if (validSpots.length > 0) {
+            const spot = pickRandom(validSpots)
+            updates.targetPosition = [...spot.position] as [number, number, number]
+            updates.targetFurniture = spot.id
+            updates.onFurniture = true
+
+            if (spot.canKnockOff && Math.random() < 0.3) {
+              updates.knockingOff = true
+            }
+          } else {
+            // 갈 곳 없으면 바닥
+            const point = pickRandom(FLOOR_WAYPOINTS)
+            updates.targetPosition = [point[0] + randomRange(-0.2, 0.2), 0, point[2] + randomRange(-0.2, 0.2)]
+            updates.targetFurniture = null
+            updates.onFurniture = false
+          }
         } else {
-          // 랜덤 배회
-          updates.targetPosition = getRandomWanderPoint()
+          // 바닥 이동 - 가까운 waypoint 중 하나 선택
+          const nearPoints = FLOOR_WAYPOINTS
+            .map(p => ({ point: p, dist: distance(cat.position, p) }))
+            .filter(p => p.dist > 0.5 && p.dist < 4)
+            .sort((a, b) => a.dist - b.dist)
+            .slice(0, 5)
+
+          if (nearPoints.length > 0) {
+            const chosen = pickRandom(nearPoints).point
+            updates.targetPosition = [chosen[0] + randomRange(-0.2, 0.2), 0, chosen[2] + randomRange(-0.2, 0.2)]
+          } else {
+            updates.targetPosition = [cat.position[0] + randomRange(-1, 1), 0, cat.position[2] + randomRange(-1, 1)]
+          }
           updates.targetFurniture = null
+          updates.onFurniture = false
         }
       } else {
         updates.targetPosition = null
+        updates.knockingOff = false
       }
 
       state.updateCat(catId, updates)
 
-      // 다음 행동까지 시간
-      const duration = ACTION_DURATIONS[nextAction]
-      const timeout = randomInRange(duration[0], duration[1])
-
-      timerRef.current = setTimeout(runBehavior, timeout)
+      // 다음 틱 예약
+      const [min, max] = ACTION_DURATIONS[nextAction]
+      timerRef.current = setTimeout(tick, randomRange(min, max))
     }
 
-    // 각 고양이마다 다른 시작 딜레이
-    const initialDelay = randomInRange(500, 2000)
-    timerRef.current = setTimeout(runBehavior, initialDelay)
+    // 시작
+    timerRef.current = setTimeout(tick, randomRange(500, 2000))
 
     return () => {
       mountedRef.current = false
-      if (timerRef.current) {
-        clearTimeout(timerRef.current)
-      }
+      if (timerRef.current) clearTimeout(timerRef.current)
     }
   }, [catId])
 }

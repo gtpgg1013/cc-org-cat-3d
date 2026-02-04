@@ -10,6 +10,8 @@ export interface CatState {
   action: CatAction
   targetPosition: [number, number, number] | null
   targetFurniture: string | null
+  onFurniture: boolean
+  knockingOff: boolean
   happiness: number
   color: string
   pattern: 'solid' | 'tabby' | 'bicolor' | 'calico'

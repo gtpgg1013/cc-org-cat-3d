@@ -116,15 +116,16 @@ function CatBody({ color, pattern, eyeColor, action, isHappy }: CatBodyProps) {
 
     // === LEG ANIMATION ===
     if (isWalking) {
-      const walkSpeed = 10
-      const walkAmount = 0.3
+      // 다리 움직임 속도를 실제 이동과 맞춤 (15 = useFrame의 바운스 속도)
+      const walkSpeed = 15
+      const walkAmount = 0.4
       if (frontLeftLegRef.current) frontLeftLegRef.current.rotation.x = Math.sin(time * walkSpeed) * walkAmount
       if (frontRightLegRef.current) frontRightLegRef.current.rotation.x = Math.sin(time * walkSpeed + Math.PI) * walkAmount
       if (backLeftLegRef.current) backLeftLegRef.current.rotation.x = Math.sin(time * walkSpeed + Math.PI) * walkAmount
       if (backRightLegRef.current) backRightLegRef.current.rotation.x = Math.sin(time * walkSpeed) * walkAmount
     } else {
       [frontLeftLegRef, frontRightLegRef, backLeftLegRef, backRightLegRef].forEach(ref => {
-        if (ref.current) ref.current.rotation.x = THREE.MathUtils.lerp(ref.current.rotation.x, 0, 0.1)
+        if (ref.current) ref.current.rotation.x = THREE.MathUtils.lerp(ref.current.rotation.x, 0, 0.15)
       })
     }
   })
@@ -401,13 +402,15 @@ interface CatProps {
 
 export function Cat({ catData }: CatProps) {
   const groupRef = useRef<THREE.Group>(null)
-  const { id, position, action, targetPosition, color, pattern, eyeColor } = catData
+  const { id, position, action, targetPosition, onFurniture, knockingOff, color, pattern, eyeColor } = catData
   const updateCat = useGameStore((state) => state.updateCat)
   const petCat = useGameStore((state) => state.petCat)
   const selectCat = useGameStore((state) => state.selectCat)
+  const addFallenItem = useGameStore((state) => state.addFallenItem)
 
   const [hearts, setHearts] = useState<THREE.Vector3[]>([])
   const [isHappy, setIsHappy] = useState(false)
+  const hasKnockedRef = useRef(false)
 
   useCatBehavior(id)
 
@@ -432,29 +435,80 @@ export function Cat({ catData }: CatProps) {
     }
   }
 
+  // Reset knock state when action changes
+  if (!knockingOff) {
+    hasKnockedRef.current = false
+  }
+
   useFrame((state, delta) => {
     if (!groupRef.current) return
     const current = groupRef.current.position
 
     if (action === 'walking' && targetPosition) {
       const tx = targetPosition[0]
+      const ty = targetPosition[1]
       const tz = targetPosition[2]
       const dx = tx - current.x
       const dz = tz - current.z
       const dist = Math.sqrt(dx * dx + dz * dz)
 
-      if (dist > 0.1) {
-        const speed = 1.2 * delta
-        current.x += (dx / dist) * speed
-        current.z += (dz / dist) * speed
+      // 먼저 바닥으로 내려와야 걸을 수 있음
+      const isOnGround = current.y < 0.15
+
+      if (!isOnGround && ty < 0.1) {
+        // 가구에서 바닥으로 내려오는 중 - 먼저 점프해서 내려옴
+        current.y = THREE.MathUtils.lerp(current.y, 0, 0.15)
+        // 방향만 미리 돌림
         const targetRotation = Math.atan2(dx, dz)
         groupRef.current.rotation.y = THREE.MathUtils.lerp(groupRef.current.rotation.y, targetRotation, 0.1)
-        current.y = Math.abs(Math.sin(state.clock.elapsedTime * 12)) * 0.02
+      } else if (dist > 0.2) {
+        // 이동
+        const speed = 1.8 * delta
+        current.x += (dx / dist) * speed
+        current.z += (dz / dist) * speed
+
+        // 방향 전환
+        const targetRotation = Math.atan2(dx, dz)
+        groupRef.current.rotation.y = THREE.MathUtils.lerp(groupRef.current.rotation.y, targetRotation, 0.1)
+
+        // 높이 처리
+        if (ty > 0.1 && dist < 0.6) {
+          // 가구 근처 - 점프해서 올라감
+          current.y = THREE.MathUtils.lerp(current.y, ty, 0.12)
+        } else {
+          // 바닥에서 걷기 (작은 바운스)
+          const bounce = Math.abs(Math.sin(state.clock.elapsedTime * 14)) * 0.015
+          current.y = THREE.MathUtils.lerp(current.y, bounce, 0.2)
+        }
       } else {
-        updateCat(id, { action: 'idle', targetPosition: null })
+        // 도착
+        current.x = tx
+        current.z = tz
+        current.y = THREE.MathUtils.lerp(current.y, ty, 0.2)
+
+        // 테이블에서 물건 떨어뜨리기
+        if (knockingOff && !hasKnockedRef.current) {
+          hasKnockedRef.current = true
+          const itemTypes: ('cup' | 'vase' | 'book')[] = ['cup', 'vase', 'book']
+          const itemType = itemTypes[Math.floor(Math.random() * itemTypes.length)]
+          addFallenItem({
+            id: `fallen-${Date.now()}`,
+            position: [
+              current.x + (Math.random() - 0.5) * 0.5,
+              0.05,
+              current.z + (Math.random() - 0.5) * 0.5
+            ],
+            type: itemType,
+            createdAt: Date.now()
+          })
+        }
+
+        updateCat(id, { action: 'idle', targetPosition: null, knockingOff: false })
       }
     } else {
-      current.y = THREE.MathUtils.lerp(current.y, 0, 0.1)
+      // idle/sitting/sleeping - 현재 높이 유지
+      const baseY = current.y < 0.1 ? 0 : current.y
+      current.y = THREE.MathUtils.lerp(current.y, baseY, 0.05)
     }
   })
 
